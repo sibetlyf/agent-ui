@@ -60,7 +60,7 @@ const References: FC<ReferenceProps> = ({ references }) => (
   </div>
 )
 
-export const AgentMessageWrapper = ({ message }: MessageWrapperProps) => {
+export const AgentMessageWrapper = ({ message, isLastMessage }: MessageWrapperProps) => {
   return (
     <div className="flex flex-col gap-y-9">
       {message.extra_data?.reasoning_steps &&
@@ -119,30 +119,40 @@ export const AgentMessageWrapper = ({ message }: MessageWrapperProps) => {
                 tools={toolCall}
               />
             ))}
-            {(message as any).metadata && Object.keys((message as any).metadata).length > 0 && (
-              <MetadataButton metadata={(message as any).metadata} />
+            {hasMetadata(message) && (
+              <MetadataButton metadata={message.metadata} />
             )}
           </div>
         </div>
       )}
-      <AgentMessage message={message} />
+      <AgentMessage message={message} isLastMessage={isLastMessage} />
     </div>
   )
 }
 const Reasoning: FC<ReasoningStepProps> = ({ index, stepTitle }) => (
-  <div className="flex items-center gap-2 text-secondary">
-    <div className="flex h-[20px] items-center rounded-md bg-background-secondary p-2">
-      <p className="text-xs">STEP {index + 1}</p>
+  <div className="relative flex items-start gap-4 pb-5 last:pb-1 group">
+    {/* Timeline Line */}
+    <div className="absolute left-[7px] top-[22px] bottom-0 w-[1px] bg-white/[0.08] group-last:hidden" />
+    
+    {/* Timeline Dot */}
+    <div className="relative mt-1.5 flex flex-col items-center">
+      <div className="z-10 h-[15px] w-[15px] rounded-full border-2 border-cyan-400/20 bg-[#03060d] flex items-center justify-center">
+        <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+      </div>
     </div>
-    <p className="text-xs">{stepTitle}</p>
+
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <span className="text-[10px] font-bold font-mono text-slate-500 uppercase tracking-widest">Thought {index + 1}</span>
+      <p className="text-[13px] text-slate-300 font-medium leading-relaxed">{stepTitle}</p>
+    </div>
   </div>
 )
 const Reasonings: FC<ReasoningProps> = ({ reasoning }) => (
-  <div className="flex flex-col items-start justify-center gap-2">
+  <div className="flex flex-col items-start w-full pr-4">
     {reasoning.map((title, index) => (
       <Reasoning
         key={`${title.title}-${title.action}-${index}`}
-        stepTitle={title.title}
+        stepTitle={title.title || ('content' in title ? String(title.content) : '')}
         index={index}
       />
     ))}
@@ -151,32 +161,163 @@ const Reasonings: FC<ReasoningProps> = ({ reasoning }) => (
 
 const ToolComponent = memo(({ tools }: ToolCallProps) => {
   const setSelectedToolCall = useStore((state) => state.setSelectedToolCall);
+  const messages = useStore((state) => state.messages);
   const selectedToolCall = useStore((state) => state.selectedToolCall);
-  
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [typedStreamingText, setTypedStreamingText] = React.useState('');
+
   const isSelected = selectedToolCall?.tool_call_id === tools.tool_call_id;
+  const isError = tools.tool_call_error;
+
+  const sessionBlock = React.useMemo(() => {
+    for (const message of messages) {
+      if (message.role !== 'agent' || !message.tool_sessions) continue
+      const matched = message.tool_sessions.find(
+        (s) => s.tool_call_id === tools.tool_call_id || s.id === (tools.tool_call_id || `${tools.tool_name}-${tools.created_at}`)
+      )
+      if (matched) return matched
+    }
+    return null
+  }, [messages, tools.tool_call_id, tools.tool_name, tools.created_at])
+
+  const sessionStatus = sessionBlock?.status;
+  const resultPayload = tools.result ?? tools.content ?? null
+  const isRunning = sessionStatus === 'running' || (!tools.tool_call_error && !resultPayload && tools.metrics?.time === undefined);
+  const isCompleted = sessionStatus === 'completed' || (!!resultPayload && !tools.tool_call_error);
+
+  React.useEffect(() => {
+    const target = sessionBlock?.streaming_text ?? ''
+    if (!target) {
+      setTypedStreamingText('')
+      return
+    }
+    if (target.length <= typedStreamingText.length) {
+      if (target !== typedStreamingText) setTypedStreamingText(target)
+      return
+    }
+
+    let raf: number | null = null
+    let index = typedStreamingText.length
+    const step = () => {
+      index = Math.min(target.length, index + 2)
+      setTypedStreamingText(target.slice(0, index))
+      if (index < target.length) {
+        raf = requestAnimationFrame(step)
+      }
+    }
+    raf = requestAnimationFrame(step)
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [sessionBlock?.streaming_text, typedStreamingText])
+
+  const toggleExpand = () => setIsExpanded(!isExpanded);
+
+  const formatJSON = (data: unknown) => {
+    try {
+      if (!data) return ''
+      if (typeof data === 'string') {
+        const parsed = JSON.parse(data)
+        return JSON.stringify(parsed, null, 2)
+      }
+      return JSON.stringify(data, null, 2)
+    } catch {
+      return String(data)
+    }
+  }
 
   return (
-    <button
-      onClick={() => setSelectedToolCall(tools)}
-      className={`group flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-mono uppercase transition-all duration-200 select-none cursor-pointer ${
-        isSelected 
-          ? 'bg-accent border-accent text-primary shadow-sm ring-1 ring-ring/50 focus:outline-none' 
-          : 'bg-background-secondary/30 border-border/50 text-muted-foreground hover:bg-accent/40 hover:text-primary/90 hover:border-border'
-      }`}
-    >
-      <span className="tracking-tight">{tools.tool_name}</span>
-      {tools.tool_call_error && (
-        <span className="bg-destructive/10 text-destructive text-[10px] px-1.5 py-[1px] rounded-full">Error</span>
+    <div className={`flex flex-col gap-2 rounded-xl border transition-all duration-200 overflow-hidden ${
+      isRunning
+        ? 'border-cyan-400/50 bg-cyan-950/20 tool-card-running'
+        : isError
+          ? 'border-red-400/30 bg-red-950/10'
+          : isSelected
+            ? 'border-cyan-400/30 bg-[linear-gradient(180deg,rgba(11,18,32,0.86),rgba(8,13,24,0.82))]'
+            : 'border-white/[0.08] bg-black/20 hover:border-white/[0.15]'
+    }`}>
+      <div
+        onClick={() => {
+          setSelectedToolCall(tools);
+          toggleExpand();
+        }}
+        className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none hover:bg-white/[0.02] transition-colors"
+      >
+        <Icon type="hammer" size="sm" className={isRunning ? 'text-cyan-400 animate-pulse' : isError ? 'text-red-400' : 'text-slate-400'} />
+        <span className="font-mono text-[13px] tracking-tight text-slate-200">
+          {tools.tool_name}
+        </span>
+
+        <div className="ml-auto flex items-center gap-3">
+          {isError && (
+            <span className="bg-red-500/10 text-red-400 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider font-semibold">Error</span>
+          )}
+          {tools.metrics?.time !== undefined && (
+            <span className="text-slate-500 text-[11px] font-mono">{tools.metrics.time.toFixed(1)}s</span>
+          )}
+          {isCompleted && (
+            <span className="text-emerald-400 text-[11px] flex items-center gap-1.5">
+              <Icon type="check" size="sm" />
+              <span className="uppercase tracking-wider font-semibold">done</span>
+            </span>
+          )}
+          {isRunning && (
+            <span className="text-cyan-400 text-[11px] uppercase tracking-wider font-semibold animate-pulse">Running...</span>
+          )}
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="flex flex-col gap-3 px-4 pb-4 border-t border-white/[0.05] pt-3 animate-in slide-in-from-top-2 duration-200">
+          <div className="space-y-1.5">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Arguments</span>
+            <pre className="rounded-[14px] border border-white/[0.08] bg-slate-950/80 p-3 text-[11px] leading-5 text-slate-300 overflow-x-auto font-mono max-h-[200px]">
+              {formatJSON(tools.tool_args)}
+            </pre>
+          </div>
+          {resultPayload && (
+            <div className="space-y-1.5">
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${isError ? 'text-red-400' : 'text-emerald-400'}`}>
+                {isError ? 'Error' : 'Result'}
+              </span>
+              <pre className={`rounded-[14px] border p-3 text-[11px] leading-5 overflow-x-auto whitespace-pre-wrap font-mono max-h-[300px] ${
+                isError
+                  ? 'border-red-500/20 bg-red-950/20 text-red-200'
+                  : 'border-emerald-500/20 bg-emerald-950/20 text-emerald-200'
+              }`}>
+                {formatJSON(resultPayload)}
+              </pre>
+            </div>
+          )}
+          {sessionBlock?.streaming_text && (
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">Live Content</span>
+              <pre className="rounded-[14px] border border-cyan-400/20 bg-cyan-950/20 p-3 text-[11px] leading-5 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] font-mono max-h-[260px] text-cyan-100">
+                {typedStreamingText}
+                {sessionBlock.status === 'running' ? <span className="animate-pulse text-cyan-300"> ▋</span> : null}
+              </pre>
+            </div>
+          )}
+          {sessionBlock?.parsed_metadata?.event && (
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Metadata</span>
+              <div className="rounded-[14px] border border-white/[0.08] bg-slate-950/60 p-3 text-[11px] text-slate-300 space-y-1">
+                <div>event: <span className="text-cyan-300">{sessionBlock.parsed_metadata.event}</span></div>
+                {sessionBlock.parsed_metadata.model ? <div>model: <span className="text-slate-100">{sessionBlock.parsed_metadata.model}</span></div> : null}
+                {sessionBlock.parsed_metadata.token_usage?.total_tokens ? (
+                  <div>tokens: <span className="text-slate-100">{sessionBlock.parsed_metadata.token_usage.total_tokens}</span></div>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
       )}
-      {tools.metrics?.time !== undefined && (
-        <span className="opacity-50 text-[10px] tabular-nums">{tools.metrics.time.toFixed(1)}s</span>
-      )}
-    </button>
+    </div>
   )
 })
 ToolComponent.displayName = 'ToolComponent'
 
-const MetadataButton = memo(({ metadata }: { metadata: any }) => {
+const MetadataButton = memo(({ metadata }: { metadata: Record<string, unknown> }) => {
   const setSelectedMetadata = useStore((state) => state.setSelectedMetadata);
   const selectedMetadata = useStore((state) => state.selectedMetadata);
   const isSelected = selectedMetadata === metadata;
@@ -185,8 +326,8 @@ const MetadataButton = memo(({ metadata }: { metadata: any }) => {
     <button
       onClick={() => setSelectedMetadata(metadata)}
       className={`group flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-mono lowercase transition-all duration-200 select-none cursor-pointer ${
-        isSelected 
-          ? 'bg-primary/10 border-primary/30 text-primary shadow-sm ring-1 ring-ring/50 focus:outline-none' 
+        isSelected
+          ? 'bg-primary/10 border-primary/30 text-primary shadow-sm ring-1 ring-ring/50 focus:outline-none'
           : 'bg-background-secondary/30 border-dashed border-border/50 text-muted-foreground hover:bg-accent/40 hover:text-primary/90 hover:border-solid hover:border-border'
       }`}
     >
@@ -195,6 +336,14 @@ const MetadataButton = memo(({ metadata }: { metadata: any }) => {
   )
 })
 MetadataButton.displayName = 'MetadataButton'
+
+function hasMetadata(message: ChatMessage): message is ChatMessage & { metadata: Record<string, unknown> } {
+  return 'metadata' in message && 
+         message.metadata !== null && 
+         typeof message.metadata === 'object' &&
+         !Array.isArray(message.metadata) &&
+         Object.keys(message.metadata).length > 0
+}
 
 const Messages = ({ messages }: MessageListProps) => {
   if (messages.length === 0) {
@@ -216,7 +365,7 @@ const Messages = ({ messages }: MessageListProps) => {
             />
           )
         }
-        return <UserMessage key={key} message={message} />
+        return <UserMessage key={key} message={message} isLastMessage={isLastMessage} />
       })}
     </>
   )

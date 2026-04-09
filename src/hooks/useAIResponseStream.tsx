@@ -184,6 +184,7 @@ export default function useAIResponseStream() {
       onChunk: (chunk: RunResponseContent) => void
       onError: (error: Error) => void
       onComplete: () => void
+      signal?: AbortSignal
     }): Promise<void> => {
       const {
         apiUrl,
@@ -191,7 +192,8 @@ export default function useAIResponseStream() {
         requestBody,
         onChunk,
         onError,
-        onComplete
+        onComplete,
+        signal
       } = options
 
       // Buffer to accumulate partial JSON data.
@@ -210,7 +212,8 @@ export default function useAIResponseStream() {
           body:
             requestBody instanceof FormData
               ? requestBody
-              : JSON.stringify(requestBody)
+              : JSON.stringify(requestBody),
+          signal
         })
 
         if (!response.ok) {

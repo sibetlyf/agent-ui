@@ -2,6 +2,7 @@
 
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryState } from 'nuqs'
+import dayjs from 'dayjs'
 
 import { useStore } from '@/store'
 import useSessionLoader from '@/hooks/useSessionLoader'
@@ -121,25 +122,48 @@ const Sessions = () => {
     []
   )
 
+  const groupedSessions = useMemo(() => {
+    if (!sessionsData) return {}
+    
+    const groups: Record<string, typeof sessionsData> = {
+      Today: [],
+      Yesterday: [],
+      Previous: []
+    }
+
+    const now = dayjs()
+    sessionsData.forEach(session => {
+      const date = dayjs(session.created_at ? session.created_at * 1000 : undefined)
+      if (date.isSame(now, 'day')) {
+        groups.Today.push(session)
+      } else if (date.isSame(now.subtract(1, 'day'), 'day')) {
+        groups.Yesterday.push(session)
+      } else {
+        groups.Previous.push(session)
+      }
+    })
+
+    return groups
+  }, [sessionsData])
+
   if (isSessionsLoading || isEndpointLoading) {
     return (
-      <div className="w-full">
-        <div className="mb-2 text-xs font-medium uppercase">Sessions</div>
+      <div className="w-full px-2">
+        <div className="mb-4 h-4 w-20 rounded bg-white/5 animate-pulse" />
         <div className="mt-4 h-[calc(100vh-325px)] w-full overflow-y-auto">
-          <SkeletonList skeletonCount={5} />
+          <SkeletonList skeletonCount={8} />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="w-full">
-      <div className="mb-2 w-full text-xs font-medium uppercase">Sessions</div>
+    <div className="w-full h-full flex flex-col pt-2 font-geist">
       <div
-        className={`h-[calc(100vh-345px)] overflow-y-auto font-geist transition-all duration-300 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar]:transition-opacity [&::-webkit-scrollbar]:duration-300 ${
+        className={`flex-1 overflow-y-auto pr-1 transition-all duration-300 [&::-webkit-scrollbar]:w-1 ${
           isScrolling
-            ? '[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-background [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:opacity-0'
-            : '[&::-webkit-scrollbar]:opacity-100'
+            ? '[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-track]:bg-transparent'
+            : ''
         }`}
         onScroll={handleScroll}
         onMouseOver={() => setIsScrolling(true)}
@@ -150,18 +174,29 @@ const Sessions = () => {
           (!sessionsData || sessionsData?.length === 0)) ? (
           <SessionBlankState />
         ) : (
-          <div className="flex flex-col gap-y-1 pr-1">
-            {sessionsData?.map((entry, idx) => (
-              <SessionItem
-                key={`${entry?.session_id}-${idx}`}
-                currentSessionId={selectedSessionId}
-                isSelected={selectedSessionId === entry?.session_id}
-                onSessionClick={handleSessionClick(entry?.session_id)}
-                session_name={entry?.session_name ?? '-'}
-                session_id={entry?.session_id}
-                created_at={entry?.created_at}
-              />
-            ))}
+          <div className="flex flex-col gap-y-6 px-1">
+            {Object.entries(groupedSessions).map(([group, sessions]) => 
+              sessions.length > 0 && (
+                <div key={group} className="flex flex-col gap-y-1.5">
+                  <h3 className="px-3 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500/70">
+                    {group}
+                  </h3>
+                  <div className="flex flex-col gap-y-0.5">
+                    {sessions.map((entry, idx) => (
+                      <SessionItem
+                        key={`${entry?.session_id}-${idx}`}
+                        currentSessionId={selectedSessionId}
+                        isSelected={selectedSessionId === entry?.session_id}
+                        onSessionClick={handleSessionClick(entry?.session_id)}
+                        session_name={entry?.session_name ?? '-'}
+                        session_id={entry?.session_id}
+                        created_at={entry?.created_at}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         )}
       </div>

@@ -1,6 +1,11 @@
 import React from 'react'
 
-export default function ProtocolRenderer({ protocols }: { protocols: any[] }) {
+interface Protocol {
+  content_type?: string
+  data: unknown
+}
+
+export default function ProtocolRenderer({ protocols }: { protocols: Protocol[] }) {
   if (!protocols || protocols.length === 0) return null
 
   return (
@@ -15,7 +20,7 @@ export default function ProtocolRenderer({ protocols }: { protocols: any[] }) {
           <div className="p-4 pt-0">
             <div className="text-sm space-y-3">
               {protocol.data && typeof protocol.data === 'object' ? (
-                Object.entries(protocol.data).map(([key, value]) => {
+                Object.entries(protocol.data as Record<string, unknown>).map(([key, value]) => {
                   if (value === null || value === undefined) return null;
                   const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
                   return (

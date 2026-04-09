@@ -16,13 +16,13 @@ export default function Home() {
 
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <div className="flex h-screen bg-background/80 overflow-hidden">
+      <div className="app-shell flex bg-background/70">
         <Sidebar hasEnvToken={hasEnvToken} envToken={envToken} />
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden pl-2 md:pl-3">
           <ChatArea />
         </div>
         {showRightSidebar && (
-          <div className="flex-none h-full shadow-2xl z-10 transition-all duration-300 ease-in-out border-l border-border/40">
+          <div className="flex-none h-full pl-2 md:pl-3 z-10 transition-all duration-300 ease-in-out">
             <RightSidebar />
           </div>
         )}

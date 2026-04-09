@@ -4,17 +4,380 @@
 
 @layer base {
   :root {
-    --color-border-default: 255, 255, 255, 0.2;
-    --scrollbar-width: 0.1rem;
+    /* === 字体系统 === */
+    --font-display: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-body: "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+
+    /* === AgentOS 核心色彩系统 (HSL) === */
+    --background: 220 24% 8%;
+    --foreground: 210 20% 96%;
+
+    /* Surface层级 - 从深到浅 */
+    --surface-void: 220 30% 5%;
+    --surface-deep: 220 24% 8%;
+    --surface-base: 222 24% 11%;
+    --surface-raised: 220 19% 17%;
+    --surface-floating: 220 16% 22%;
+
+    /* 卡片和弹出层 */
+    --card: 222 24% 11%;
+    --card-foreground: 210 20% 97%;
+    --popover: 222 24% 11%;
+    --popover-foreground: 210 20% 97%;
+
+    /* 主色调 - Cyan */
+    --primary: 194 86% 62%;
+    --primary-foreground: 220 28% 10%;
+    --primary-soft: 194 86% 62% / 0.15;
+    --primary-glow: 194 86% 62% / 0.4;
+
+    /* 次要色 */
+    --secondary: 220 19% 17%;
+    --secondary-foreground: 210 24% 96%;
+
+    /* 静音/弱化色 */
+    --muted: 220 16% 16%;
+    --muted-foreground: 217 14% 67%;
+
+    /* 强调色 */
+    --accent: 212 24% 20%;
+    --accent-foreground: 210 24% 96%;
+
+    /* 功能色 */
+    --destructive: 0 73% 57%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 153 71% 49%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 60%;
+    --warning-foreground: 220 28% 10%;
+
+    /* 边框和输入 */
+    --border: 220 15% 22%;
+    --border-subtle: 220 15% 22% / 0.5;
+    --input: 220 15% 22%;
+    --ring: 194 86% 62%;
+
+    /* 圆角 */
+    --radius: 1.125rem;
+    --radius-sm: 0.625rem;
+    --radius-md: 0.875rem;
+    --radius-lg: 1.125rem;
+    --radius-xl: 1.5rem;
+    --radius-2xl: 1.75rem;
+
+    /* 图表色 */
+    --chart-cyan: 188 91% 56%;
+    --chart-blue: 213 86% 64%;
+    --chart-amber: 38 92% 60%;
+    --chart-emerald: 153 71% 49%;
+    --chart-rose: 347 77% 62%;
+
+    /* === AgentOS 特效变量 === */
+    --glow-cyan: 0 0 40px rgba(34, 211, 238, 0.15);
+    --glow-cyan-strong: 0 0 60px rgba(34, 211, 238, 0.25);
+    --shadow-panel: 0 24px 90px rgba(0, 0, 0, 0.38);
+    --shadow-elevated: 0 28px 90px rgba(0, 0, 0, 0.42);
+
+    /* 边框透明度 */
+    --border-white-8: rgba(255, 255, 255, 0.08);
+    --border-white-12: rgba(255, 255, 255, 0.12);
+    --border-white-5: rgba(255, 255, 255, 0.05);
+
+    /* 主背景 - 深太空蓝黑 */
+    --bg-void: #03060d;
+    --bg-surface: rgba(6,10,18,0.96);
+    --bg-panel: rgba(4,7,14,0.88);
+    --bg-card: linear-gradient(180deg, rgba(11,18,32,0.86), rgba(8,13,24,0.82));
+
+    /* 强调色 - Cyan 发光系 */
+    --accent-cyan: #22d3ee;
+    --accent-cyan-soft: rgba(34,211,238,0.10);
+    --accent-cyan-border: rgba(34,211,238,0.18);
+    --accent-cyan-glow: 0 8px 18px rgba(34,211,238,0.14);
+
+    /* 边框 */
+    --border-subtle: rgba(255,255,255,0.08);
+    --border-medium: rgba(255,255,255,0.12);
+
+    /* 文字层级 */
+    --text-primary: #ffffff;
+    --text-secondary: #94a3b8;  /* slate-400 */
+    --text-muted: #64748b;       /* slate-500 */
+    --text-micro: #475569;       /* slate-600 */
+
+    /* 状态色 */
+    --status-live: #34d399;      /* emerald-400 */
+    --status-error: #f87171;     /* red-400 */
+    --status-warn: #fb923c;      /* orange-400 */
+    --status-pending: #60a5fa;   /* blue-400 */
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
   }
 
   body {
-    @apply bg-background/80 text-secondary;
+    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    /* AgentOS风格的多层径向渐变背景 */
+    background-image:
+      radial-gradient(circle at 22% 18%, rgba(53, 118, 255, 0.2), transparent 28%),
+      radial-gradient(circle at 78% 18%, rgba(38, 88, 190, 0.16), transparent 24%),
+      radial-gradient(circle at 50% 50%, rgba(9, 29, 68, 0.45), transparent 56%),
+      linear-gradient(180deg, #020611 0%, #051224 52%, #030813 100%);
+    background-attachment: fixed;
+  }
+
+  pre, code {
+    @apply font-mono;
   }
 }
 
+@layer utilities {
+  /* === AgentOS Panel Surface 效果 === */
+  .panel-surface {
+    @apply border backdrop-blur-xl;
+    border-color: rgba(255, 255, 255, 0.08);
+    background:
+      linear-gradient(180deg, rgba(12, 19, 34, 0.82), rgba(8, 13, 24, 0.82)),
+      rgba(4, 9, 18, 0.64);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.02),
+      0 24px 90px rgba(0, 0, 0, 0.38);
+  }
+
+  .panel-surface-glow {
+    @apply panel-surface;
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.02),
+      0 24px 90px rgba(0, 0, 0, 0.38),
+      inset 0 1px 0 rgba(34, 211, 238, 0.06);
+  }
+
+  .panel-glass {
+    background: rgba(4,7,14,0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 28px 90px rgba(0,0,0,0.42);
+  }
+
+  .panel-glow-cyan {
+    box-shadow: 
+      0 28px 90px rgba(0,0,0,0.42),
+      inset 0 1px 0 rgba(34,211,238,0.06);
+  }
+
+  .panel-glow {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 18px 58px rgba(0, 0, 0, 0.34);
+  }
+
+  /* 消息气泡渐变背景 */
+  .message-gradient {
+    background: linear-gradient(180deg, rgba(11, 18, 32, 0.86), rgba(8, 13, 24, 0.82));
+  }
+
+  /* 工具调用卡片效果 */
+  .tool-card {
+    @apply border backdrop-blur-md;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(4, 7, 14, 0.6);
+    transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .tool-card:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(6, 10, 18, 0.7);
+  }
+
+  /* 运行中的工具卡片 */
+  .tool-card-running {
+    border-color: rgba(34, 211, 238, 0.5);
+    background: rgba(34, 211, 238, 0.08);
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+    animation: tool-pulse 2s ease-in-out infinite;
+  }
+
+  /* AgentOS平滑过渡 */
+  .mission-ease-smooth {
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* 状态环效果 */
+  .status-ring {
+    position: relative;
+  }
+
+  .status-ring::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 9999px;
+    border: 1px solid currentColor;
+    opacity: 0.15;
+  }
+
+  /* 文字渐变 */
+  .text-gradient-cyan {
+    background: linear-gradient(135deg, #22d3ee 0%, #60a5fa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* 滚动条样式 */
+  .agent-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .agent-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.22);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .agent-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.35);
+  }
+
+  .agent-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* 发光边框 */
+  .border-glow-cyan {
+    border-color: rgba(34, 211, 238, 0.3);
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.1);
+  }
+
+  /* 玻璃效果 */
+  .glass {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* 浮动效果 */
+  .float-shadow {
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06),
+      0 0 0 1px rgba(255, 255, 255, 0.05);
+  }
+
+  /* 字体 */
+  .font-display {
+    font-family: 'Inter', var(--font-geist-sans), sans-serif;
+  }
+
+  .app-shell {
+    @apply h-screen overflow-hidden p-2 md:p-3;
+  }
+
+  .pane-sidebar {
+    @apply rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(11,18,32,0.78),rgba(8,13,24,0.74))] backdrop-blur-xl;
+  }
+
+  .pane-main {
+    @apply rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(12,19,34,0.72),rgba(7,12,23,0.72))] backdrop-blur-xl;
+  }
+
+  .pane-inspector {
+    @apply rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(12,19,34,0.84),rgba(7,12,23,0.82))] backdrop-blur-xl;
+  }
+}
+
+/* === 动画关键帧 === */
+@keyframes tool-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(34, 211, 238, 0.25);
+  }
+}
+
+@keyframes message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fade-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* === 响应式断点优化 === */
+@media (max-width: 768px) {
+  .panel-surface {
+    border-radius: 1rem;
+  }
+}
+
+/* === 减少动画偏好 === */
+@media (prefers-reduced-motion: reduce) {
+  .tool-card-running {
+    animation: none;
+  }
+  
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* === 标准滚动条 === */
 ::-webkit-scrollbar {
-  width: var(--scrollbar-width);
+  width: 0.1rem;
 }
 
 ::-webkit-scrollbar-thumb {

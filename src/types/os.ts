@@ -1,6 +1,7 @@
 export interface ToolCall {
   role: 'user' | 'tool' | 'system' | 'assistant'
   content: string | null
+  result?: string | null
   tool_call_id: string
   tool_name: string
   tool_args: Record<string, string>
@@ -201,6 +202,71 @@ export interface ReasoningMessage {
   }
   created_at?: number
 }
+export interface SubAgentDocument {
+  agent_name: string
+  agent_id?: string
+  content: string
+  tool_calls?: ToolCall[]
+  extra_data?: AgentExtraData
+  created_at: number
+  metadata?: Record<string, unknown>
+}
+
+export interface CitationData {
+  source_id: string
+  title: string
+  url?: string
+  snippet?: string
+  score?: number
+  text?: string
+  source?: string
+}
+
+export interface ParsedMetadata {
+  event?: string
+  model?: string
+  token_usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    total_tokens?: number
+  }
+  citations?: CitationData[]
+  reasoning_steps?: ReasoningSteps[]
+  raw: Record<string, unknown>
+}
+
+export interface ToolSessionBlock {
+  id: string
+  tool_call_id?: string
+  tool_name: string
+  status: 'running' | 'completed' | 'error'
+  started_at?: number
+  ended_at?: number
+  metrics_time?: number
+  tool_args?: Record<string, unknown>
+  result?: string | null
+  error?: string
+  streaming_text?: string
+  parsed_metadata?: ParsedMetadata
+}
+
+export interface TodoPlan {
+  title: string
+  target: string
+  plans: {
+    mission_id: number
+    title: string
+    tools: string[]
+    steps: {
+      step_id: number
+      title: string
+      content: string
+      tools?: string[]
+      status: 'pending' | 'completed' | 'failed'
+    }[]
+  }[]
+}
+
 export interface ChatMessage {
   role: 'user' | 'agent' | 'system' | 'tool'
   content: string
@@ -216,8 +282,12 @@ export interface ChatMessage {
   videos?: VideoData[]
   audio?: AudioData[]
   response_audio?: ResponseAudio
-  protocols?: { content_type: string; data: any }[]
-  sub_messages?: ChatMessage[]
+  protocols?: { content_type: string; data: unknown }[]
+  sub_messages?: SubAgentDocument[]
+  todo_plan?: TodoPlan
+  citations?: CitationData[]
+  metadata?: Record<string, unknown>
+  tool_sessions?: ToolSessionBlock[]
 }
 
 export interface AgentDetails {

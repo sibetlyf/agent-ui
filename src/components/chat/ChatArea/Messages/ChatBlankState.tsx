@@ -1,194 +1,151 @@
 'use client'
 
-import Link from 'next/link'
-import { motion, Variants } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Icon from '@/components/ui/icon'
-import { IconType } from '@/components/ui/icon/types'
 import React, { useState } from 'react'
-
-const EXTERNAL_LINKS = {
-  documentation: 'https://agno.link/agent-ui',
-  agenOS: 'https://os.agno.com',
-  agno: 'https://agno.com'
-}
-
-const TECH_ICONS = [
-  {
-    type: 'nextjs' as IconType,
-    position: 'left-0',
-    link: 'https://nextjs.org',
-    name: 'Next.js',
-    zIndex: 10
-  },
-  {
-    type: 'shadcn' as IconType,
-    position: 'left-[15px]',
-    link: 'https://ui.shadcn.com',
-    name: 'shadcn/ui',
-    zIndex: 20
-  },
-  {
-    type: 'tailwind' as IconType,
-    position: 'left-[30px]',
-    link: 'https://tailwindcss.com',
-    name: 'Tailwind CSS',
-    zIndex: 30
-  }
-]
-
-interface ActionButtonProps {
-  href: string
-  variant?: 'primary'
-  text: string
-}
-
-const ActionButton = ({ href, variant, text }: ActionButtonProps) => {
-  const baseStyles =
-    'px-4 py-2 text-sm transition-colors font-dmmono tracking-tight'
-  const variantStyles = {
-    primary: 'border border-border hover:bg-neutral-800 rounded-xl'
-  }
-
-  return (
-    <Link
-      href={href}
-      target="_blank"
-      className={`${baseStyles} ${variant ? variantStyles[variant] : ''}`}
-    >
-      {text}
-    </Link>
-  )
-}
+import { useStore } from '@/store'
+import { useQueryState } from 'nuqs'
 
 const ChatBlankState = () => {
-  const [hoveredIcon, setHoveredIcon] = useState<string | null>(null)
+  const selectedEndpoint = useStore(state => state.selectedEndpoint)
+  const isEndpointActive = useStore(state => state.isEndpointActive)
+  const agents = useStore(state => state.agents)
+  const [, setSelectedAgentId] = useQueryState('agent')
+  const [selectedAgentShowcase, setSelectedAgentShowcase] = useState<string | null>(null)
 
-  // Animation variants for the icon
-  const iconVariants: Variants = {
-    initial: { y: 0 },
-    hover: {
-      y: -8,
-      transition: {
-        type: 'spring',
-        stiffness: 150,
-        damping: 10,
-        mass: 0.5
-      }
-    },
-    exit: {
-      y: 0,
-      transition: {
-        type: 'spring',
-        stiffness: 200,
-        damping: 15,
-        mass: 0.6
-      }
-    }
+  const particles = Array.from({ length: 30 }).map(() => ({
+    width: Math.random() * 4 + 1 + 'px',
+    height: Math.random() * 4 + 1 + 'px',
+    left: Math.random() * 100 + '%',
+    top: Math.random() * 100 + '%',
+    animationDuration: Math.random() * 5 + 3 + 's',
+    animationDelay: Math.random() * 5 + 's',
+  }))
+
+  const handleSelectAgent = (agentId: string) => {
+    setSelectedAgentId(agentId)
   }
 
-  // Animation variants for the tooltip
-  const tooltipVariants: Variants = {
-    hidden: {
-      opacity: 0,
-      transition: {
-        duration: 0.15,
-        ease: 'easeInOut'
-      }
-    },
-    visible: {
-      opacity: 1,
-      transition: {
-        duration: 0.15,
-        ease: 'easeInOut'
-      }
-    }
+  const handleShowAgentInfo = (agentId: string) => {
+    setSelectedAgentShowcase(agentId === selectedAgentShowcase ? null : agentId)
   }
 
   return (
-    <section
-      className="flex flex-col items-center text-center font-geist"
-      aria-label="Welcome message"
-    >
-      <div className="flex max-w-3xl flex-col gap-y-8">
-        <motion.h1
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="text-3xl font-[600] tracking-tight"
-        >
-          <div className="flex items-center justify-center gap-x-2 whitespace-nowrap font-medium">
-            <span className="flex items-center font-[600]">
-              This is an open-source
-            </span>
-            <span className="inline-flex translate-y-[10px] scale-125 items-center transition-transform duration-200 hover:rotate-6">
-              <Link
-                href={EXTERNAL_LINKS.agno}
-                target="_blank"
-                rel="noopener"
-                className="cursor-pointer"
-              >
-                <Icon type="agno-tag" size="default" />
-              </Link>
-            </span>
-            <span className="flex items-center font-[600]">
-              Agent UI, built with
-            </span>
-            <span className="inline-flex translate-y-[5px] scale-125 items-center">
-              <div className="relative ml-2 h-[40px] w-[90px]">
-                {TECH_ICONS.map((icon) => (
-                  <motion.div
-                    key={icon.type}
-                    className={`absolute ${icon.position} top-0`}
-                    style={{ zIndex: icon.zIndex }}
-                    variants={iconVariants}
-                    initial="initial"
-                    whileHover="hover"
-                    animate={hoveredIcon === icon.type ? 'hover' : 'exit'}
-                    onHoverStart={() => setHoveredIcon(icon.type)}
-                    onHoverEnd={() => setHoveredIcon(null)}
-                  >
-                    <Link
-                      href={icon.link}
-                      target="_blank"
-                      rel="noopener"
-                      className="relative block cursor-pointer"
-                    >
-                      <div>
-                        <Icon type={icon.type} size="default" />
-                      </div>
-                      <motion.div
-                        className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 transform whitespace-nowrap rounded bg-neutral-800 px-2 py-1 text-xs text-primary"
-                        variants={tooltipVariants}
-                        initial="hidden"
-                        animate={
-                          hoveredIcon === icon.type ? 'visible' : 'hidden'
-                        }
-                      >
-                        {icon.name}
-                      </motion.div>
-                    </Link>
-                  </motion.div>
-                ))}
-              </div>
-            </span>
-          </div>
-          <p>For the full experience, visit the AgentOS</p>
-        </motion.h1>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-          className="flex justify-center gap-4"
-        >
-          <ActionButton
-            href={EXTERNAL_LINKS.documentation}
-            variant="primary"
-            text="GO TO DOCS"
+    <div className="relative flex w-full flex-col items-center justify-center p-8 font-geist min-h-[60vh] overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 z-0 opacity-40 mix-blend-screen">
+        {particles.map((style, i) => (
+          <div
+            key={i}
+            className="absolute rounded-full bg-cyan-400 opacity-0 shadow-[0_0_8px_rgba(34,211,238,0.8)] animate-pulse"
+            style={style}
           />
-          <ActionButton href={EXTERNAL_LINKS.agenOS} text="VISIT AGENTOS" />
-        </motion.div>
+        ))}
       </div>
-    </section>
+
+      <div className="z-10 flex max-w-3xl flex-col items-center gap-y-10 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="flex flex-col items-center gap-5"
+        >
+          <div className="flex h-20 w-20 items-center justify-center rounded-[28px] border border-cyan-400/20 bg-[linear-gradient(180deg,rgba(7,10,18,0.98),rgba(3,6,12,0.98))] shadow-[0_0_40px_rgba(34,211,238,0.15)]">
+            <Icon type="agent" size="lg" className="text-cyan-400" />
+          </div>
+          <h1 className="font-display text-4xl font-semibold tracking-tight text-white drop-shadow-sm">
+            与您的智能体对话
+          </h1>
+          <p className="max-w-[400px] text-[15px] leading-relaxed text-slate-400">
+            连接至 <span className="font-mono text-cyan-300 px-1 py-0.5 rounded bg-cyan-950/30">{selectedEndpoint || 'Local Node'}</span>
+            <br />
+            {isEndpointActive ? (
+              <span className="text-emerald-400 flex items-center justify-center gap-1.5 mt-2 text-xs uppercase tracking-widest"><div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div> Gateway Connected</span>
+            ) : (
+              <span className="text-slate-500 flex items-center justify-center gap-1.5 mt-2 text-xs uppercase tracking-widest"><div className="w-1.5 h-1.5 rounded-full bg-slate-500"></div> System Offline</span>
+            )}
+          </p>
+        </motion.div>
+
+        {agents && agents.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="w-full max-w-xl"
+          >
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-4 font-semibold text-center mt-6">选择您的智能代理</p>
+            <div className="grid grid-cols-2 gap-3">
+              {agents.slice(0, 4).map((agent) => (
+                <div key={agent.id}>
+                  <button
+                    onClick={() => handleShowAgentInfo(agent.id)}
+                    className={`group w-full flex flex-col items-start gap-2 rounded-[20px] border p-4 text-left transition-all ${
+                      selectedAgentShowcase === agent.id
+                        ? 'border-cyan-400/40 bg-[linear-gradient(180deg,rgba(11,18,32,0.8),rgba(8,13,24,0.8))] shadow-[0_8px_30px_rgba(34,211,238,0.15)]'
+                        : 'border-white/[0.08] bg-[linear-gradient(180deg,rgba(11,18,32,0.4),rgba(8,13,24,0.4))] hover:bg-[linear-gradient(180deg,rgba(11,18,32,0.7),rgba(8,13,24,0.7))] hover:border-cyan-400/30 hover:shadow-[0_8px_30px_rgba(34,211,238,0.1)]'
+                    } focus:outline-none`}
+                  >
+                    <div className="flex w-full items-center justify-between">
+                      <span className={`font-display text-[15px] font-medium transition-colors ${
+                        selectedAgentShowcase === agent.id ? 'text-cyan-400' : 'text-slate-200 group-hover:text-cyan-400'
+                      }`}>
+                        {agent.name || agent.id}
+                      </span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`opacity-0 -translate-x-2 transition-all ${
+                        selectedAgentShowcase === agent.id ? 'opacity-100 translate-x-0 rotate-180' : 'group-hover:opacity-100 group-hover:translate-x-0'
+                      } text-cyan-400`}><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {agent.model?.provider && agent.model?.model
+                        ? `${agent.model.provider} · ${agent.model.model}`
+                        : agent.model?.provider
+                          ? `${agent.model.provider} Model`
+                          : 'Agent Framework'
+                      }
+                    </span>
+                  </button>
+
+                  <AnimatePresence>
+                    {selectedAgentShowcase === agent.id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                        animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                        className="overflow-hidden"
+                      >
+                        <div className="rounded-[16px] border border-cyan-400/20 bg-[linear-gradient(180deg,rgba(11,18,32,0.6),rgba(8,13,24,0.6))] p-4 space-y-3">
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <Icon type="agent" size="xs" />
+                            <span className="font-mono">{agent.model?.name || agent.model?.model || 'AI Agent'}</span>
+                            {agent.db_id && (
+                              <>
+                                <span className="text-slate-600">·</span>
+                                <span className="text-emerald-400 flex items-center gap-1">
+                                  <div className="w-1 h-1 rounded-full bg-emerald-400" />
+                                  Persisted
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          <button
+                            onClick={() => handleSelectAgent(agent.id)}
+                            className="w-full mt-2 h-9 rounded-full bg-cyan-400 text-[11px] font-bold uppercase tracking-wider text-slate-950 hover:bg-cyan-300 transition-colors shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+                          >
+                            开始对话
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </div>
   )
 }
 

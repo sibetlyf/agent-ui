@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { useQueryState } from 'nuqs'
 import { truncateText } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
+import useAIChatStreamHandler from '@/hooks/useAIStreamHandler'
 
 const ENDPOINT_PLACEHOLDER = 'NO ENDPOINT ADDED'
 const SidebarHeader = () => (
@@ -39,6 +40,25 @@ const NewChatButton = ({
   >
     <Icon type="plus-icon" size="xs" className="text-background" />
     <span className="uppercase">New Chat</span>
+  </Button>
+)
+
+const ReplayButton = ({
+  disabled,
+  onClick
+}: {
+  disabled: boolean
+  onClick: () => void
+}) => (
+  <Button
+    onClick={onClick}
+    disabled={disabled}
+    size="lg"
+    variant="secondary"
+    className="h-9 w-full rounded-xl border-cyan-400/30 bg-cyan-950/20 text-xs font-medium text-cyan-200 hover:bg-cyan-900/30"
+  >
+    <Icon type="refresh" size="xs" className="text-cyan-300" />
+    <span className="uppercase">Replay test.json</span>
   </Button>
 )
 
@@ -210,6 +230,7 @@ const Sidebar = ({
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const { clearChat, focusChatInput, initialize } = useChatActions()
+  const { handleStreamResponse } = useAIChatStreamHandler()
   const {
     messages,
     selectedEndpoint,
@@ -217,7 +238,9 @@ const Sidebar = ({
     selectedModel,
     hydrated,
     isEndpointLoading,
-    mode
+    mode,
+    runContext,
+    isStreaming
   } = useStore()
   const [isMounted, setIsMounted] = useState(false)
   const [agentId] = useQueryState('agent')
@@ -232,6 +255,11 @@ const Sidebar = ({
   const handleNewChat = () => {
     clearChat()
     focusChatInput()
+  }
+
+  const handleReplay = async () => {
+    clearChat()
+    await handleStreamResponse({ isReplay: true })
   }
 
   return (
@@ -268,9 +296,64 @@ const Sidebar = ({
           disabled={messages.length === 0}
           onClick={handleNewChat}
         />
+        <ReplayButton disabled={isStreaming} onClick={handleReplay} />
         {isMounted && (
           <>
             <Endpoint />
+            {runContext && (
+              <motion.div
+                className="flex w-full flex-col items-start gap-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, ease: 'easeInOut' }}
+              >
+                <div className="text-xs font-medium uppercase text-primary">Runtime Context</div>
+                <div className="w-full rounded-xl border border-primary/15 bg-accent p-3 space-y-2">
+                  {runContext.workspace && (
+                    <div className="text-[10px] leading-relaxed text-slate-300">
+                      <span className="text-slate-500 uppercase tracking-wider">workspace</span>
+                      <div className="mt-1 font-mono text-[10px] break-all text-cyan-300">{runContext.workspace}</div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    {runContext.session_id ? (
+                      <div>
+                        <span className="text-slate-500 uppercase tracking-wider">session</span>
+                        <div className="font-mono text-slate-300 truncate">{runContext.session_id}</div>
+                      </div>
+                    ) : null}
+                    {runContext.run_id ? (
+                      <div>
+                        <span className="text-slate-500 uppercase tracking-wider">run</span>
+                        <div className="font-mono text-slate-300 truncate">{runContext.run_id}</div>
+                      </div>
+                    ) : null}
+                    {runContext.record_id ? (
+                      <div>
+                        <span className="text-slate-500 uppercase tracking-wider">record</span>
+                        <div className="font-mono text-slate-300 truncate">{runContext.record_id}</div>
+                      </div>
+                    ) : null}
+                    {runContext.user_id ? (
+                      <div>
+                        <span className="text-slate-500 uppercase tracking-wider">user</span>
+                        <div className="font-mono text-slate-300 truncate">{runContext.user_id}</div>
+                      </div>
+                    ) : null}
+                  </div>
+                  {runContext.vibe_record_ids && runContext.vibe_record_ids.length > 0 ? (
+                    <div className="text-[10px]">
+                      <span className="text-slate-500 uppercase tracking-wider">vibe records</span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {runContext.vibe_record_ids.slice(0, 4).map((rid) => (
+                          <span key={rid} className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-1.5 py-0.5 font-mono text-cyan-300">{rid}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </motion.div>
+            )}
             <AuthToken hasEnvToken={hasEnvToken} envToken={envToken} />
             {isEndpointActive && (
               <>

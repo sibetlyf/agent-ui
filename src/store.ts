@@ -12,8 +12,8 @@ import {
 interface Store {
   selectedToolCall: ToolCall | null
   setSelectedToolCall: (tc: ToolCall | null) => void
-  selectedMetadata: any
-  setSelectedMetadata: (meta: any) => void
+  selectedMetadata: Record<string, unknown> | null
+  setSelectedMetadata: (meta: Record<string, unknown> | null) => void
   hydrated: boolean
   setHydrated: () => void
   streamingErrorMessage: string
@@ -59,6 +59,59 @@ interface Store {
   ) => void
   isSessionsLoading: boolean
   setIsSessionsLoading: (isSessionsLoading: boolean) => void
+  abortController: AbortController | null
+  setAbortController: (controller: AbortController | null) => void
+  runContext: {
+    userspace?: string
+    sessionspace?: string
+    workspace?: string
+    runspace?: string
+    user_id?: string
+    record_id?: string
+    session_id?: string
+    run_id?: string
+    vibe_record_ids?: string[]
+  } | null
+  setRunContext: (
+    ctx:
+      | {
+          userspace?: string
+          sessionspace?: string
+          workspace?: string
+          runspace?: string
+          user_id?: string
+          record_id?: string
+          session_id?: string
+          run_id?: string
+          vibe_record_ids?: string[]
+        }
+      | null
+      | ((
+          prev:
+            | {
+                userspace?: string
+                sessionspace?: string
+                workspace?: string
+                runspace?: string
+                user_id?: string
+                record_id?: string
+                session_id?: string
+                run_id?: string
+                vibe_record_ids?: string[]
+              }
+            | null
+        ) => {
+          userspace?: string
+          sessionspace?: string
+          workspace?: string
+          runspace?: string
+          user_id?: string
+          record_id?: string
+          session_id?: string
+          run_id?: string
+          vibe_record_ids?: string[]
+        } | null)
+  ) => void
 }
 
 export const useStore = create<Store>()(
@@ -113,7 +166,14 @@ export const useStore = create<Store>()(
         })),
       isSessionsLoading: false,
       setIsSessionsLoading: (isSessionsLoading) =>
-        set(() => ({ isSessionsLoading }))
+        set(() => ({ isSessionsLoading })),
+      abortController: null,
+      setAbortController: (controller) => set({ abortController: controller }),
+      runContext: null,
+      setRunContext: (ctx) =>
+        set((state) => ({
+          runContext: typeof ctx === 'function' ? ctx(state.runContext) : ctx
+        }))
     }),
     {
       name: 'endpoint-storage',
