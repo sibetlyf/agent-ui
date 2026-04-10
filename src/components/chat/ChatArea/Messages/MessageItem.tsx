@@ -78,7 +78,10 @@ const AgentMessage = ({ message, isLastMessage }: MessageProps) => {
         {message.sub_messages && message.sub_messages.length > 0 && (
           <div className="mt-4 flex flex-col gap-3">
             {message.sub_messages.map((doc, idx) => (
-              <SubAgentDocumentViewer key={`doc-${idx}`} doc={doc} />
+              <SubAgentDocumentViewer
+                key={`${doc.agent_name}-${doc.created_at}-${idx}`}
+                doc={doc}
+              />
             ))}
           </div>
         )}

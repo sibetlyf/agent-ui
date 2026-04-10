@@ -243,6 +243,10 @@ export interface ToolSessionBlock {
   started_at?: number
   ended_at?: number
   metrics_time?: number
+  duration_seconds?: number
+  token_input?: number
+  token_output?: number
+  token_total?: number
   tool_args?: Record<string, unknown>
   result?: string | null
   error?: string
@@ -288,6 +292,7 @@ export interface ChatMessage {
   citations?: CitationData[]
   metadata?: Record<string, unknown>
   tool_sessions?: ToolSessionBlock[]
+  reasoning_stream?: string
 }
 
 export interface AgentDetails {

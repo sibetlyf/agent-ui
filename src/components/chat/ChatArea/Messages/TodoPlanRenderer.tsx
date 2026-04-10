@@ -45,18 +45,18 @@ const TodoPlanRenderer: React.FC<TodoPlanRendererProps> = ({ plan }) => {
 
   return (
     <div className="my-4 w-full rounded-2xl border border-cyan-300/30 bg-[linear-gradient(180deg,rgba(13,21,38,0.95),rgba(7,12,23,0.94))] p-5 shadow-xl font-geist animate-in slide-in-from-top-2 duration-300">
-      <div className="mb-6 flex items-start justify-between border-b border-white/10 pb-4">
-        <div>
+      <div className="mb-6 flex items-start justify-between gap-3 border-b border-white/10 pb-4">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="bg-cyan-400/20 text-cyan-200 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-widest font-bold">Mission Dispatch</span>
-            <span className="text-slate-300 text-xs">/ {plan.target}</span>
+            <span className="text-slate-300 text-xs break-words">/ {plan.target}</span>
           </div>
-          <h2 className="text-lg font-semibold text-white tracking-tight">{plan.title}</h2>
+          <h2 className="text-lg font-semibold text-white tracking-tight leading-snug break-words">{plan.title}</h2>
           <div className="mt-1 text-xs text-slate-300">
             {totalMissions} missions · {completedSteps}/{totalSteps} steps completed
           </div>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/20 text-cyan-200">
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-400/20 text-cyan-200 self-start">
           <Icon type="reasoning" size="default" />
         </div>
       </div>

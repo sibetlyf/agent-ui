@@ -61,8 +61,27 @@ const References: FC<ReferenceProps> = ({ references }) => (
 )
 
 export const AgentMessageWrapper = ({ message, isLastMessage }: MessageWrapperProps) => {
+  const isStreaming = useStore((state) => state.isStreaming)
   return (
     <div className="flex flex-col gap-y-9">
+      {message.reasoning_stream && message.reasoning_stream.trim().length > 0 && (
+        <div className="flex items-start gap-4">
+          <Tooltip
+            delayDuration={0}
+            content={<p className="text-accent">Thinking Stream</p>}
+            side="top"
+          >
+            <Icon type="reasoning" size="sm" />
+          </Tooltip>
+          <div className="w-full rounded-xl border border-amber-300/30 bg-amber-400/10 p-3">
+            <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-amber-200">Thinking</div>
+            <pre className="whitespace-pre-wrap [overflow-wrap:anywhere] text-[12px] leading-relaxed text-amber-50 font-mono">
+              {message.reasoning_stream}
+              {isLastMessage && isStreaming ? <span className="animate-pulse text-amber-200"> ▋</span> : null}
+            </pre>
+          </div>
+        </div>
+      )}
       {message.extra_data?.reasoning_steps &&
         message.extra_data.reasoning_steps.length > 0 && (
           <div className="flex items-start gap-4">
@@ -255,6 +274,12 @@ const ToolComponent = memo(({ tools }: ToolCallProps) => {
           {tools.metrics?.time !== undefined && (
             <span className="text-slate-500 text-[11px] font-mono">{tools.metrics.time.toFixed(1)}s</span>
           )}
+          {sessionBlock?.duration_seconds !== undefined && (
+            <span className="text-slate-300 text-[10px] font-mono">Δ {sessionBlock.duration_seconds.toFixed(1)}s</span>
+          )}
+          {sessionBlock?.token_total !== undefined && sessionBlock.token_total > 0 && (
+            <span className="text-amber-200 text-[10px] font-mono">{sessionBlock.token_total} tok</span>
+          )}
           {isCompleted && (
             <span className="text-emerald-400 text-[11px] flex items-center gap-1.5">
               <Icon type="check" size="sm" />
@@ -307,6 +332,16 @@ const ToolComponent = memo(({ tools }: ToolCallProps) => {
                 {sessionBlock.parsed_metadata.token_usage?.total_tokens ? (
                   <div>tokens: <span className="text-slate-100">{sessionBlock.parsed_metadata.token_usage.total_tokens}</span></div>
                 ) : null}
+              </div>
+            </div>
+          )}
+          {(sessionBlock?.token_input || sessionBlock?.token_output || sessionBlock?.token_total) && (
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold text-amber-200 uppercase tracking-widest">Token Usage</span>
+              <div className="rounded-[14px] border border-amber-300/30 bg-amber-400/10 p-3 text-[11px] text-amber-50 space-y-1 font-mono">
+                <div>input: {sessionBlock?.token_input ?? 0}</div>
+                <div>output: {sessionBlock?.token_output ?? 0}</div>
+                <div>total: {sessionBlock?.token_total ?? 0}</div>
               </div>
             </div>
           )}

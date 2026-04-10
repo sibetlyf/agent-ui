@@ -13,6 +13,13 @@ interface SessionEvent {
   status?: string
 }
 
+type SubagentEntry = {
+  agent_name: string
+  content: string
+  created_at: number
+  metadata?: Record<string, unknown>
+}
+
 const RightSidebar = () => {
   const selectedToolCall = useStore((state) => state.selectedToolCall)
   const selectedMetadata = useStore((state) => state.selectedMetadata)
@@ -58,6 +65,32 @@ const RightSidebar = () => {
       .reduce((sum, e) => sum + (e.time || 0), 0)
   }, [sessionEvents])
 
+  const tokenSummary = React.useMemo(() => {
+    const sessions = messages
+      .filter((m) => m.role === 'agent' && m.tool_sessions)
+      .flatMap((m) => m.tool_sessions ?? [])
+    const input = sessions.reduce((s, t) => s + (t.token_input ?? 0), 0)
+    const output = sessions.reduce((s, t) => s + (t.token_output ?? 0), 0)
+    const total = sessions.reduce((s, t) => s + (t.token_total ?? 0), 0)
+    return { input, output, total }
+  }, [messages])
+
+  const subagentEntries = React.useMemo(() => {
+    const entries: SubagentEntry[] = []
+    messages.forEach((m) => {
+      if (m.role !== 'agent' || !m.sub_messages) return
+      m.sub_messages.forEach((sm) => {
+        entries.push({
+          agent_name: sm.agent_name,
+          content: sm.content,
+          created_at: sm.created_at,
+          metadata: sm.metadata
+        })
+      })
+    })
+    return entries.sort((a, b) => b.created_at - a.created_at)
+  }, [messages])
+
   if (!selectedToolCall && !selectedMetadata) return null
 
   const handleClose = () => {
@@ -79,8 +112,8 @@ const RightSidebar = () => {
   }
 
   return (
-    <div className="flex h-full w-[400px] flex-col panel-glass font-geist z-50">
-      <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3 bg-[rgba(7,10,18,0.98)]">
+    <div className="pane-inspector flex h-full w-[400px] flex-col font-geist z-50">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-[rgba(9,14,25,0.96)]">
         <h2 className="text-sm font-semibold tracking-tight text-slate-100 flex items-center gap-2">
           <div className="size-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
           Inspector
@@ -97,27 +130,33 @@ const RightSidebar = () => {
         <TabsList className="flex w-full justify-start rounded-none border-b border-white/[0.08] bg-transparent p-0 pl-4 space-x-6">
           <TabsTrigger
             value="overview"
-            className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-400 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-400"
+          className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-300 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-300"
           >
             Overview
           </TabsTrigger>
           <TabsTrigger
             value="timeline"
-            className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-400 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-400"
+            className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-300 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-300"
           >
             Timeline
           </TabsTrigger>
           <TabsTrigger
             value="raw"
-            className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-400 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-400"
+            className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-300 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-300"
           >
             Raw
           </TabsTrigger>
           <TabsTrigger
             value="context"
-            className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-400 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-400"
+            className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-300 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-300"
           >
             Context
+          </TabsTrigger>
+          <TabsTrigger
+            value="subagents"
+            className="rounded-none border-b-2 border-transparent px-2 py-3 text-sm font-medium text-slate-300 data-[state=active]:border-cyan-400 data-[state=active]:text-cyan-300"
+          >
+            Subagents
           </TabsTrigger>
         </TabsList>
 
@@ -126,30 +165,35 @@ const RightSidebar = () => {
             <TabsContent value="overview" className="m-0 p-5 outline-none space-y-6">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Events</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Events</span>
                   <div className="mt-1 text-2xl font-semibold text-slate-100">{sessionEvents.length}</div>
                 </div>
                 <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Latency</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Latency</span>
                   <div className="mt-1 text-2xl font-semibold text-cyan-400">{totalToolTime.toFixed(1)}s</div>
+                </div>
+                <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 col-span-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Tool Tokens</span>
+                  <div className="mt-1 text-xl font-semibold text-amber-200">{tokenSummary.total}</div>
+                  <div className="mt-1 text-[11px] text-slate-200 font-mono">in {tokenSummary.input} · out {tokenSummary.output}</div>
                 </div>
               </div>
 
                 <div className="space-y-3">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-1">Session Context</h4>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300 px-1">Session Context</h4>
                 <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 space-y-4 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Status</span>
+                    <span className="text-slate-300">Status</span>
                     <span className={isStreaming ? "text-cyan-400 animate-pulse font-medium" : "text-emerald-400 font-medium"}>
                       {isStreaming ? 'STREAMING' : 'IDLE'}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Total Thoughts</span>
+                    <span className="text-slate-300">Total Thoughts</span>
                     <span className="text-slate-200">{sessionEvents.filter(e => e.type === 'thought').length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Total Tools</span>
+                    <span className="text-slate-300">Total Tools</span>
                     <span className="text-slate-200">{sessionEvents.filter(e => e.type === 'tool').length}</span>
                   </div>
                 </div>
@@ -165,28 +209,40 @@ const RightSidebar = () => {
 
                  return (
                    <div className="space-y-3 pt-2">
-                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-1">Parsed Metadata</h4>
+                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300 px-1">Parsed Metadata</h4>
                      <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 space-y-2 text-sm">
                        <div className="flex justify-between">
-                         <span className="text-slate-400">Tool Session</span>
+                          <span className="text-slate-300">Tool Session</span>
                          <span className="text-slate-200 font-mono text-xs">{matchedSession.id}</span>
                        </div>
                        <div className="flex justify-between">
-                         <span className="text-slate-400">Status</span>
+                          <span className="text-slate-300">Status</span>
                          <span className={matchedSession.status === 'running' ? 'text-cyan-400' : matchedSession.status === 'error' ? 'text-red-400' : 'text-emerald-400'}>{matchedSession.status.toUpperCase()}</span>
                        </div>
                        {matchedSession.parsed_metadata?.event ? (
                          <div className="flex justify-between">
-                           <span className="text-slate-400">Event</span>
+                            <span className="text-slate-300">Event</span>
                            <span className="text-cyan-300">{matchedSession.parsed_metadata.event}</span>
                          </div>
                        ) : null}
                        {matchedSession.parsed_metadata?.token_usage?.total_tokens ? (
-                         <div className="flex justify-between">
-                           <span className="text-slate-400">Tokens</span>
-                           <span className="text-slate-200">{matchedSession.parsed_metadata.token_usage.total_tokens}</span>
-                         </div>
-                       ) : null}
+                          <div className="flex justify-between">
+                            <span className="text-slate-300">Tokens</span>
+                            <span className="text-slate-200">{matchedSession.parsed_metadata.token_usage.total_tokens}</span>
+                          </div>
+                        ) : null}
+                        {matchedSession.token_total ? (
+                          <div className="flex justify-between">
+                            <span className="text-slate-300">Tool Tokens</span>
+                            <span className="text-amber-200">{matchedSession.token_total}</span>
+                          </div>
+                        ) : null}
+                        {matchedSession.duration_seconds ? (
+                          <div className="flex justify-between">
+                            <span className="text-slate-300">Duration</span>
+                            <span className="text-cyan-300">{matchedSession.duration_seconds.toFixed(2)}s</span>
+                          </div>
+                        ) : null}
                      </div>
                    </div>
                  )
@@ -194,13 +250,13 @@ const RightSidebar = () => {
 
                {selectedToolCall && (
                   <div className="space-y-3 pt-2">
-                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-1">Selected Focus</h4>
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300 px-1">Selected Focus</h4>
                    <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4">
                      <div className="flex items-center gap-2 mb-2">
                        <Icon type="hammer" size="xs" className="text-cyan-400" />
                        <span className="text-xs font-bold text-slate-200">{selectedToolCall.tool_name}</span>
                      </div>
-                     <p className="text-[11px] text-slate-400 leading-relaxed">
+                      <p className="text-[11px] text-slate-200 leading-relaxed">
                        Currently inspecting active tool execution details in the Raw tab.
                      </p>
                    </div>
@@ -211,15 +267,15 @@ const RightSidebar = () => {
             <TabsContent value="timeline" className="m-0 p-5 outline-none">
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Execution Stream</h4>
-                  <span className="text-[10px] font-mono text-slate-600">LIVE RELAY</span>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Execution Stream</h4>
+                  <span className="text-[10px] font-mono text-slate-300">LIVE RELAY</span>
                 </div>
                 
                 <div className="relative pl-4 space-y-6">
                   <div className="absolute left-[-1px] top-2 bottom-2 w-[1px] bg-white/[0.08]" />
                   
                   {sessionEvents.length === 0 ? (
-                    <div className="text-center py-10 text-slate-600 italic text-sm">No events recorded.</div>
+                    <div className="text-center py-10 text-slate-300 italic text-sm">No events recorded.</div>
                   ) : (
                     sessionEvents.map((event, idx) => (
                       <div key={idx} className="relative group">
@@ -230,9 +286,9 @@ const RightSidebar = () => {
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center justify-between">
                             <span className="text-[11px] font-bold text-slate-300 uppercase tracking-tight">{event.type}</span>
-                            {event.time && <span className="text-[10px] font-mono text-slate-600">{event.time.toFixed(1)}s</span>}
+                            {event.time && <span className="text-[10px] font-mono text-slate-300">{event.time.toFixed(1)}s</span>}
                           </div>
-                          <p className="text-[13px] text-slate-400 group-hover:text-slate-200 transition-colors truncate">{event.title}</p>
+                          <p className="text-[13px] text-slate-200 group-hover:text-white transition-colors truncate">{event.title}</p>
                         </div>
                       </div>
                     ))
@@ -252,23 +308,23 @@ const RightSidebar = () => {
                       <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-[9px] font-bold text-red-400 uppercase">Error</span>
                     )}
                     {selectedToolCall.metrics?.time !== undefined && (
-                      <span className="ml-auto text-[11px] text-slate-500 font-mono">
+                      <span className="ml-auto text-[11px] text-slate-300 font-mono">
                         {selectedToolCall.metrics.time.toFixed(2)}s
                       </span>
                     )}
                   </div>
                   
                   <div className="space-y-2">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Arguments</span>
-                    <pre className="rounded-2xl border border-white/[0.05] bg-black/40 p-4 text-[11px] leading-5 text-slate-300 overflow-x-auto font-mono custom-scrollbar">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest pl-1">Arguments</span>
+                    <pre className="rounded-2xl border border-white/[0.08] bg-black/45 p-4 text-[11px] leading-5 text-slate-100 overflow-x-auto font-mono custom-scrollbar">
                       {formatJSON(selectedToolCall.tool_args)}
                     </pre>
                   </div>
 
                   {(selectedToolCall.result || selectedToolCall.content) && (
                     <div className="space-y-2">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Result</span>
-                      <pre className="rounded-2xl border border-white/[0.05] bg-black/40 p-4 text-[11px] leading-5 text-slate-300 overflow-x-auto whitespace-pre-wrap font-mono custom-scrollbar max-h-[400px]">
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest pl-1">Result</span>
+                      <pre className="rounded-2xl border border-white/[0.08] bg-black/45 p-4 text-[11px] leading-5 text-slate-100 overflow-x-auto whitespace-pre-wrap font-mono custom-scrollbar max-h-[400px]">
                         {formatJSON(selectedToolCall.result || selectedToolCall.content)}
                       </pre>
                     </div>
@@ -279,10 +335,10 @@ const RightSidebar = () => {
               {selectedMetadata && Object.keys(selectedMetadata).length > 0 && (
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2 pl-1">
                       Metadata Parameters
                     </span>
-                    <pre className="rounded-2xl border border-white/[0.05] bg-black/40 p-4 text-[11px] leading-5 text-slate-300 overflow-x-auto font-mono custom-scrollbar">
+                    <pre className="rounded-2xl border border-white/[0.08] bg-black/45 p-4 text-[11px] leading-5 text-slate-100 overflow-x-auto font-mono custom-scrollbar">
                       {formatJSON(selectedMetadata)}
                     </pre>
                   </div>
@@ -292,44 +348,44 @@ const RightSidebar = () => {
 
             <TabsContent value="context" className="m-0 p-5 outline-none space-y-5">
               <div className="space-y-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Environment Chain</h4>
+                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Environment Chain</h4>
                 <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 space-y-3 text-xs">
                   <div className="space-y-1">
-                    <div className="text-slate-500 uppercase tracking-wider">USERSPACE</div>
+                    <div className="text-slate-300 uppercase tracking-wider">USERSPACE</div>
                     <div className="font-mono text-slate-300 break-all">{runContext?.userspace || 'N/A'}</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-slate-500 uppercase tracking-wider">SESSIONSPACE</div>
+                    <div className="text-slate-300 uppercase tracking-wider">SESSIONSPACE</div>
                     <div className="font-mono text-slate-300 break-all">{runContext?.sessionspace || 'N/A'}</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-slate-500 uppercase tracking-wider">WORKSPACE</div>
+                    <div className="text-slate-300 uppercase tracking-wider">WORKSPACE</div>
                     <div className="font-mono text-cyan-300 break-all">{runContext?.workspace || 'N/A'}</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-slate-500 uppercase tracking-wider">RUNSPACE</div>
+                    <div className="text-slate-300 uppercase tracking-wider">RUNSPACE</div>
                     <div className="font-mono text-slate-300 break-all">{runContext?.runspace || 'N/A'}</div>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Runtime IDs</h4>
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Runtime IDs</h4>
                 <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <div className="text-slate-500 uppercase tracking-wider">USER_ID</div>
+                    <div className="text-slate-300 uppercase tracking-wider">USER_ID</div>
                     <div className="font-mono text-slate-300 truncate">{runContext?.user_id || 'N/A'}</div>
                   </div>
                   <div>
-                    <div className="text-slate-500 uppercase tracking-wider">RECORD_ID</div>
+                    <div className="text-slate-300 uppercase tracking-wider">RECORD_ID</div>
                     <div className="font-mono text-slate-300 truncate">{runContext?.record_id || 'N/A'}</div>
                   </div>
                   <div>
-                    <div className="text-slate-500 uppercase tracking-wider">SESSION_ID</div>
+                    <div className="text-slate-300 uppercase tracking-wider">SESSION_ID</div>
                     <div className="font-mono text-cyan-300 truncate">{runContext?.session_id || 'N/A'}</div>
                   </div>
                   <div>
-                    <div className="text-slate-500 uppercase tracking-wider">RUN_ID</div>
+                    <div className="text-slate-300 uppercase tracking-wider">RUN_ID</div>
                     <div className="font-mono text-cyan-300 truncate">{runContext?.run_id || 'N/A'}</div>
                   </div>
                 </div>
@@ -337,12 +393,58 @@ const RightSidebar = () => {
 
               {runContext?.vibe_record_ids && runContext.vibe_record_ids.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Vibe Record IDs</h4>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Vibe Record IDs</h4>
                   <div className="rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 flex flex-wrap gap-2">
                     {runContext.vibe_record_ids.map((rid) => (
                       <span key={rid} className="rounded-md border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 text-[10px] font-mono text-cyan-300">{rid}</span>
                     ))}
                   </div>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="subagents" className="m-0 p-5 outline-none space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Subagent Inspector</h4>
+                <span className="text-[10px] font-mono text-slate-400">{subagentEntries.length} cards</span>
+              </div>
+              {subagentEntries.length === 0 ? (
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-slate-400">
+                  No subagent cards captured in this session yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {subagentEntries.map((entry, idx) => {
+                    const meta = (entry.metadata ?? {}) as Record<string, unknown>
+                    const artifactPath = typeof meta.__artifact_path === 'string' ? meta.__artifact_path : null
+                    const updatedAt = typeof meta.__updated_at === 'number' ? meta.__updated_at : null
+                    const runs = Array.isArray(meta.__runs) ? meta.__runs.length : 0
+                    return (
+                      <button
+                        key={`${entry.agent_name}-${entry.created_at}-${idx}`}
+                        type="button"
+                        onClick={() => setSelectedMetadata(meta)}
+                        className="w-full rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 text-left hover:border-cyan-300/35 hover:bg-cyan-500/10"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-slate-200 truncate">{entry.agent_name}</span>
+                          <span className="text-[10px] text-slate-400">{new Date(entry.created_at * 1000).toLocaleTimeString()}</span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-400 truncate">{entry.content.replace(/\n/g, ' ')}</div>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-slate-300">
+                          <div className="rounded-md border border-white/10 bg-black/20 px-2 py-1">
+                            path: <span className="font-mono text-slate-200">{artifactPath ? 'yes' : 'no'}</span>
+                          </div>
+                          <div className="rounded-md border border-white/10 bg-black/20 px-2 py-1">
+                            runs: <span className="font-mono text-cyan-200">{runs}</span>
+                          </div>
+                          <div className="rounded-md border border-white/10 bg-black/20 px-2 py-1">
+                            updated: <span className="font-mono text-slate-200">{updatedAt ? new Date(updatedAt * 1000).toLocaleTimeString() : 'n/a'}</span>
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </TabsContent>

@@ -155,17 +155,108 @@ const upsertToolSessionsFromToolCalls = (
       started_at: tool.created_at,
       ended_at: status === 'running' ? undefined : (tool.created_at ?? Math.floor(Date.now() / 1000)),
       metrics_time: tool.metrics?.time,
+      duration_seconds:
+        typeof tool.metrics?.time === 'number'
+          ? tool.metrics.time
+          : status !== 'running' && typeof tool.created_at === 'number'
+            ? Math.max(0, (tool.created_at ?? 0) - (sessions[index]?.started_at ?? tool.created_at ?? Math.floor(Date.now() / 1000)))
+            : sessions[index]?.duration_seconds,
       tool_args: tool.tool_args,
       result: inferredResult,
       error: tool.tool_call_error ? toolResult || tool.content || 'Tool call error' : undefined
     }
     if (index >= 0) {
-      sessions[index] = { ...sessions[index], ...partial }
+      const merged = { ...sessions[index], ...partial }
+      if (merged.status !== 'running' && merged.started_at && merged.ended_at && (merged.duration_seconds === undefined || merged.duration_seconds === 0)) {
+        merged.duration_seconds = Math.max(0, merged.ended_at - merged.started_at)
+      }
+      sessions[index] = merged
     } else {
       sessions.push(partial)
     }
   }
   message.tool_sessions = sessions
+}
+
+const extractTokenMetrics = (chunk: RunResponse) => {
+  const root = chunk as unknown as Record<string, unknown>
+  const metricsObj = toRecord(chunk.metrics) ?? toRecord(root.metrics)
+  const input =
+    (typeof root.input_tokens === 'number' ? root.input_tokens : undefined) ??
+    (typeof metricsObj?.input_tokens === 'number' ? metricsObj.input_tokens : undefined)
+  const output =
+    (typeof root.output_tokens === 'number' ? root.output_tokens : undefined) ??
+    (typeof metricsObj?.output_tokens === 'number' ? metricsObj.output_tokens : undefined)
+  const total =
+    (typeof root.total_tokens === 'number' ? root.total_tokens : undefined) ??
+    (typeof metricsObj?.total_tokens === 'number' ? metricsObj.total_tokens : undefined)
+  if (input === undefined && output === undefined && total === undefined) return null
+  return { input, output, total }
+}
+
+const upsertToolSessionTokenMetrics = (message: ChatMessage, chunk: RunResponse) => {
+  const tokens = extractTokenMetrics(chunk)
+  if (!tokens) return
+  const sessions = [...(message.tool_sessions ?? [])]
+  if (sessions.length === 0) return
+
+  let targetIndex = sessions.findIndex((s) => s.status === 'running')
+  if (targetIndex < 0) targetIndex = sessions.length - 1
+  if (targetIndex < 0) return
+
+  const target = sessions[targetIndex]
+  sessions[targetIndex] = {
+    ...target,
+    token_input: (target.token_input ?? 0) + (tokens.input ?? 0),
+    token_output: (target.token_output ?? 0) + (tokens.output ?? 0),
+    token_total: (target.token_total ?? 0) + (tokens.total ?? 0)
+  }
+  message.tool_sessions = sessions
+}
+
+const appendReasoningStream = (message: ChatMessage, chunk: RunResponse) => {
+  const root = chunk as unknown as Record<string, unknown>
+  const extra = toRecord(root.extra_data)
+  const metadataObj = toRecord(root.metadata)
+  const metadataText = typeof root.metadata === 'string' ? root.metadata : ''
+  const decodeEscaped = (s: string) =>
+    s
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+
+  const extractFromMetadataText = (text: string): string | null => {
+    if (!text) return null
+    const jsonLike = text.match(/(?:reasoning_content|thinking_content)\"\s*:\s*\"([\s\S]*?)\"/)
+    if (jsonLike?.[1]) return decodeEscaped(jsonLike[1])
+    const reprLike = text.match(/(?:reasoning_content|thinking_content)=\'([\s\S]*?)\'/)
+    if (reprLike?.[1]) return decodeEscaped(reprLike[1])
+    return null
+  }
+  const extractedFromMetadataText = extractFromMetadataText(metadataText)
+
+  const reasoningChunk =
+    typeof root.reasoning_content === 'string'
+      ? root.reasoning_content
+      : typeof root.thinking_content === 'string'
+        ? root.thinking_content
+        : typeof extra?.reasoning_content === 'string'
+          ? extra.reasoning_content
+          : typeof extra?.thinking_content === 'string'
+            ? extra.thinking_content
+            : typeof metadataObj?.reasoning_content === 'string'
+              ? metadataObj.reasoning_content
+              : typeof metadataObj?.thinking_content === 'string'
+                ? metadataObj.thinking_content
+                : extractedFromMetadataText
+  if (!reasoningChunk || !reasoningChunk.trim()) return
+  const previous = message.reasoning_stream ?? ''
+  const delta = reasoningChunk.startsWith(previous)
+    ? reasoningChunk.slice(previous.length)
+    : reasoningChunk
+  message.reasoning_stream = `${previous}${delta}`
 }
 
 const appendToToolSessionStreaming = (
@@ -222,6 +313,25 @@ const upsertSessionMetadata = (
     parsed_metadata: parseMetadata(mergedRaw)
   }
   message.tool_sessions = sessions
+}
+
+const inferPreferredToolCallId = (
+  metadataRaw?: Record<string, unknown> | null,
+  chunkLike?: Record<string, unknown> | null
+) => {
+  if (metadataRaw) {
+    const direct = metadataRaw.tool_call_id
+    if (typeof direct === 'string' && direct.trim()) return direct
+    const nestedMeta = toRecord(metadataRaw.metadata)
+    if (nestedMeta && typeof nestedMeta.tool_call_id === 'string' && nestedMeta.tool_call_id.trim()) {
+      return nestedMeta.tool_call_id
+    }
+  }
+  if (chunkLike) {
+    const direct = chunkLike.tool_call_id
+    if (typeof direct === 'string' && direct.trim()) return direct
+  }
+  return undefined
 }
 
 const tryParseJsonFromText = (text: string): Record<string, unknown> | null => {
@@ -581,6 +691,8 @@ const useAIChatStreamHandler = () => {
               chunk.event === RunEvent.TeamRunContent
             ) {
               setMessages((prevMessages) => {
+                const maybeLast = prevMessages[prevMessages.length - 1]
+                if (!maybeLast || maybeLast.role !== 'agent') return prevMessages
                 const newMessages = [...prevMessages]
                 const lastMessage = newMessages[newMessages.length - 1]
                 if (
@@ -591,6 +703,7 @@ const useAIChatStreamHandler = () => {
                   const uniqueContent = chunk.content.replace(lastContent, '')
                   lastMessage.content += uniqueContent
                   lastContent = chunk.content
+                  appendReasoningStream(lastMessage, chunk)
 
                   // Handle tool calls streaming
                   lastMessage.tool_calls = processChunkToolCalls(
@@ -627,6 +740,7 @@ const useAIChatStreamHandler = () => {
                   if (chunk.audio) {
                     lastMessage.audio = chunk.audio
                   }
+                  upsertToolSessionTokenMetrics(lastMessage, chunk)
                 } else if (
                   lastMessage &&
                   lastMessage.role === 'agent' &&
@@ -652,8 +766,20 @@ const useAIChatStreamHandler = () => {
                 }
                 return newMessages
               })
+            } else if (chunk.event === RunEvent.ModelRequestCompleted) {
+              setMessages((prevMessages) => {
+                const newMessages = [...prevMessages]
+                const lastMessage = newMessages[newMessages.length - 1]
+                if (lastMessage && lastMessage.role === 'agent') {
+                  upsertToolSessionTokenMetrics(lastMessage, chunk)
+                  appendReasoningStream(lastMessage, chunk)
+                }
+                return newMessages
+              })
             } else if (chunk.event === RunEvent.CustomEvent) {
               setMessages((prevMessages) => {
+                const maybeLast = prevMessages[prevMessages.length - 1]
+                if (!maybeLast || maybeLast.role !== 'agent') return prevMessages
                 const newMessages = [...prevMessages]
                 const lastMessage = newMessages[newMessages.length - 1]
                 if (!lastMessage || lastMessage.role !== 'agent') return newMessages
@@ -745,8 +871,12 @@ const useAIChatStreamHandler = () => {
                     }
                   }
 
+                  appendReasoningStream(lastMessage, innerChunk as unknown as RunResponse)
+                  upsertToolSessionTokenMetrics(lastMessage, innerChunk as unknown as RunResponse)
+
                   if (innerChunk.metadata && typeof innerChunk.metadata === 'object') {
-                    upsertSessionMetadata(lastMessage, innerChunk.metadata)
+                    const preferredToolCallId = inferPreferredToolCallId(innerChunk.metadata, innerChunk as unknown as Record<string, unknown>)
+                    upsertSessionMetadata(lastMessage, innerChunk.metadata, preferredToolCallId)
                     const extracted = extractRunContextFromMetadata(innerChunk.metadata)
                     if (Object.keys(extracted).length > 0) {
                       setRunContext((prev) => ({ ...(prev ?? {}), ...extracted }))
@@ -761,12 +891,14 @@ const useAIChatStreamHandler = () => {
                   }
                   lastContent = chunk.content
                   if (chunkAny.metadata && typeof chunkAny.metadata === 'object') {
-                    upsertSessionMetadata(lastMessage, chunkAny.metadata)
+                    const preferredToolCallId = inferPreferredToolCallId(chunkAny.metadata, chunkAny)
+                    upsertSessionMetadata(lastMessage, chunkAny.metadata, preferredToolCallId)
                     const extracted = extractRunContextFromMetadata(chunkAny.metadata)
                     if (Object.keys(extracted).length > 0) {
                       setRunContext((prev) => ({ ...(prev ?? {}), ...extracted }))
                     }
                   }
+                  appendReasoningStream(lastMessage, chunk)
                 } else if (chunkAny.type === 'citation') {
                   const metadataObj = toRecord(chunkAny.metadata)
                   const parsed = metadataObj ? parseMetadata(metadataObj) : undefined
@@ -779,6 +911,12 @@ const useAIChatStreamHandler = () => {
                       setRunContext((prev) => ({ ...(prev ?? {}), ...extracted }))
                     }
                   }
+                } else if (chunkAny.type === 'thinking' && typeof chunk.content === 'string') {
+                  const previous = lastMessage.reasoning_stream ?? ''
+                  const delta = chunk.content.startsWith(previous)
+                    ? chunk.content.slice(previous.length)
+                    : chunk.content
+                  lastMessage.reasoning_stream = `${previous}${delta}`
                 }
                 return newMessages;
               })
@@ -888,6 +1026,8 @@ const useAIChatStreamHandler = () => {
                         s.status === 'running' ? { ...s, status: 'completed', ended_at: chunk.created_at ?? s.ended_at } : s
                       )
                     }
+                    appendReasoningStream(next, chunk)
+                    upsertToolSessionTokenMetrics(next, chunk)
                     syncTodoPlanFromToolCalls(next)
                     return next
                   }
